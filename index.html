@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Wheel of Free Time</title>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Free Time">
+<meta name="theme-color" content="#1b1b2f">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" type="image/png" href="icon-192.png">
+<script src="https://cdn.jsdelivr.net/npm/marked@12/marked.min.js"></script>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body { margin:0; font-family: -apple-system, system-ui, Segoe UI, Roboto, sans-serif; background:#1b1b2f; color:#f4f4f8;
+         padding: env(safe-area-inset-top) 12px calc(24px + env(safe-area-inset-bottom)); }
+  h1 { text-align:center; font-size:1.5rem; margin:18px 0 6px; }
+  .sub { text-align:center; opacity:.7; margin:0 0 10px; font-size:.95rem; }
+  .wheelwrap { position:relative; width:min(92vw, 460px); margin:0 auto; aspect-ratio:1; }
+  canvas { width:100%; height:100%; display:block; touch-action: manipulation; cursor:pointer; }
+  .pointer { position:absolute; top:-6px; left:50%; transform:translateX(-50%); width:0; height:0;
+             border-left:18px solid transparent; border-right:18px solid transparent; border-top:34px solid #fff;
+             filter: drop-shadow(0 2px 3px rgba(0,0,0,.6)); z-index:2; }
+  button { font: inherit; font-weight:700; border:0; border-radius:14px; padding:14px 20px; cursor:pointer; }
+  #spin { display:block; margin:16px auto; font-size:1.3rem; padding:16px 48px; background:#ffca3a; color:#1b1b2f;
+          box-shadow:0 4px 0 #b88a00; }
+  #spin:disabled { opacity:.5; }
+  #result { display:none; max-width:680px; margin:10px auto; background:#26264a; border-radius:18px; padding:18px; }
+  #result h2 { margin:0 0 4px; font-size:1.35rem; }
+  .tag { display:inline-block; font-size:.75rem; padding:2px 8px; border-radius:999px; background:#3d3d70; margin-bottom:10px; }
+  .row { display:flex; gap:10px; flex-wrap:wrap; margin:12px 0; }
+  .row button { flex:1 1 140px; background:#1982c4; color:#fff; }
+  #timerBtn.running { background:#8ac926; color:#1b1b2f; }
+  #timer { font-variant-numeric: tabular-nums; }
+  .links a, #lesson a { color:#7fd4ff; }
+  .links { padding-left:18px; }
+  #lesson { line-height:1.5; overflow-wrap:anywhere; }
+  #lesson table { border-collapse:collapse; font-size:.9rem; display:block; overflow-x:auto; }
+  #lesson td, #lesson th { border:1px solid #4a4a80; padding:4px 6px; }
+  #lesson hr { border:0; border-top:1px solid #4a4a80; }
+  .toast { position:fixed; left:50%; bottom:30px; transform:translateX(-50%); background:#fff; color:#111; padding:10px 16px;
+           border-radius:12px; font-weight:600; opacity:0; transition:opacity .3s; pointer-events:none; }
+  .toast.show { opacity:1; }
+</style>
+</head>
+<body>
+<h1>🎡 Wheel of Free Time</h1>
+<p class="sub">Got 15 minutes? Tap the wheel.</p>
+<div class="wheelwrap">
+  <div class="pointer"></div>
+  <canvas id="wheel" width="920" height="920" aria-label="Tap to spin"></canvas>
+</div>
+<button id="spin">SPIN</button>
+
+<div id="result">
+  <h2 id="rName"></h2>
+  <span class="tag" id="rType"></span>
+  <div class="row">
+    <button id="timerBtn">⏱ Start <span id="timer">15:00</span></button>
+    <button id="copyBtn">📋 Copy for Spark</button>
+  </div>
+  <ul class="links" id="rLinks"></ul>
+  <div id="lesson"></div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+(function () {
+  "use strict";
+  var COLORS = ["#ff595e","#ff924c","#ffca3a","#8ac926","#1982c4","#6a4c93","#f15bb5","#00bbf9","#e76f51","#2a9d8f"];
+  var canvas = document.getElementById("wheel");
+  var ctx = canvas.getContext("2d");
+  var spinBtn = document.getElementById("spin");
+  var items = [];
+  var rotation = 0;           // radians
+  var spinning = false;
+  var current = null;
+
+  function randInt(n) {       // uniform integer in [0, n) via rejection sampling
+    var buf = new Uint32Array(1), limit = Math.floor(0x100000000 / n) * n;
+    do { crypto.getRandomValues(buf); } while (buf[0] >= limit);
+    return buf[0] % n;
+  }
+  function randFloat() { var b = new Uint32Array(1); crypto.getRandomValues(b); return b[0] / 0x100000000; }
+
+  function draw() {
+    var W = canvas.width, c = W / 2, r = c - 8, n = items.length || 1, seg = 2 * Math.PI / n;
+    ctx.clearRect(0, 0, W, W);
+    for (var i = 0; i < n; i++) {
+      var a0 = rotation + i * seg;
+      ctx.beginPath(); ctx.moveTo(c, c); ctx.arc(c, c, r, a0, a0 + seg); ctx.closePath();
+      ctx.fillStyle = COLORS[i % COLORS.length]; ctx.fill();
+      ctx.lineWidth = 4; ctx.strokeStyle = "#1b1b2f"; ctx.stroke();
+      if (!items[i]) continue;
+      ctx.save(); ctx.translate(c, c); ctx.rotate(a0 + seg / 2);
+      ctx.textAlign = "right"; ctx.textBaseline = "middle";
+      ctx.fillStyle = "#fff"; ctx.shadowColor = "rgba(0,0,0,.55)"; ctx.shadowBlur = 6;
+      var label = items[i].label, size = 40;
+      ctx.font = "700 " + size + "px system-ui, sans-serif";
+      while (ctx.measureText(label).width > r - 110 && size > 18) { size -= 2; ctx.font = "700 " + size + "px system-ui, sans-serif"; }
+      ctx.fillText(label, r - 22, 0);
+      ctx.restore();
+    }
+    ctx.beginPath(); ctx.arc(c, c, 54, 0, 2 * Math.PI); ctx.fillStyle = "#fff"; ctx.fill();
+    ctx.fillStyle = "#1b1b2f"; ctx.font = "800 30px system-ui, sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.fillText("SPIN", c, c);
+  }
+
+  function spin() {
+    if (spinning || !items.length) return;
+    spinning = true; spinBtn.disabled = true;
+    var n = items.length, seg = 2 * Math.PI / n;
+    var pick = randInt(n);
+    var jitter = (randFloat() - 0.5) * seg * 0.7;                 // land somewhere inside the slice, not on an edge
+    var target = -Math.PI / 2 - (pick + 0.5) * seg + jitter;       // slice centre under the top pointer
+    var twoPi = 2 * Math.PI;
+    var delta = ((target - rotation) % twoPi + twoPi) % twoPi;
+    var start = rotation, end = rotation + delta + twoPi * (5 + randInt(2));
+    var dur = 4200, t0 = null;
+    function ease(t) { return 1 - Math.pow(1 - t, 4); }
+    function frame(ts) {
+      if (t0 === null) t0 = ts;
+      var t = Math.min(1, (ts - t0) / dur);
+      rotation = start + (end - start) * ease(t);
+      draw();
+      if (t < 1) requestAnimationFrame(frame);
+      else { rotation = end % twoPi; spinning = false; spinBtn.disabled = false; showResult(items[pick]); }
+    }
+    requestAnimationFrame(frame);
+  }
+
+  function esc(s) { return String(s).replace(/[&<>"']/g, function (ch) { return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[ch]; }); }
+  function md(text) {
+    if (window.marked && marked.parse) return marked.parse(text);
+    return "<pre style='white-space:pre-wrap'>" + esc(text) + "</pre>";
+  }
+  function fixLinks(el) { el.querySelectorAll("a").forEach(function (a) { a.target = "_blank"; a.rel = "noopener"; }); }
+
+  function showResult(item) {
+    current = item; resetTimer();
+    document.getElementById("rName").textContent = item.name;
+    document.getElementById("rType").textContent = item.type === "one-off" ? "fun one-off" : "skill";
+    var ul = document.getElementById("rLinks");
+    ul.innerHTML = (item.links || []).map(function (l) {
+      return '<li><a href="' + esc(l.url) + '" target="_blank" rel="noopener">' + esc(l.title) + "</a></li>";
+    }).join("");
+    var lesson = document.getElementById("lesson");
+    var fallback = "<h3>Your 15 minutes</h3><p>" + esc(item.block) + "</p>";
+    lesson.innerHTML = fallback;
+    var box = document.getElementById("result"); box.style.display = "block";
+    if (item.currentLesson) {
+      lesson.innerHTML = "<p>Loading lesson…</p>";
+      fetch(item.currentLesson, { cache: "no-cache" })
+        .then(function (r) { if (!r.ok) throw new Error(r.status); return r.text(); })
+        .then(function (t) { if (current === item) { lesson.innerHTML = md(t); fixLinks(lesson); } })
+        .catch(function () { if (current === item) lesson.innerHTML = fallback; });
+    }
+    setTimeout(function () { box.scrollIntoView({ behavior: "smooth", block: "start" }); }, 150);
+  }
+
+  // 15-minute timer
+  var timerEnd = null, timerId = null, timerBtn = document.getElementById("timerBtn"), timerEl = document.getElementById("timer");
+  function fmt(ms) { var s = Math.max(0, Math.ceil(ms / 1000)); return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0"); }
+  function resetTimer() { clearInterval(timerId); timerId = null; timerEnd = null; timerBtn.classList.remove("running");
+    timerBtn.innerHTML = '⏱ Start <span id="timer">15:00</span>'; timerEl = document.getElementById("timer"); }
+  function beep() {
+    try { var A = window.AudioContext || window.webkitAudioContext, ac = new A();
+      [0, 0.4, 0.8].forEach(function (d) { var o = ac.createOscillator(), g = ac.createGain(); o.frequency.value = 880;
+        o.connect(g); g.connect(ac.destination); g.gain.value = 0.3; o.start(ac.currentTime + d); o.stop(ac.currentTime + d + 0.25); });
+    } catch (e) {}
+    if (navigator.vibrate) navigator.vibrate([300, 150, 300]);
+  }
+  timerBtn.addEventListener("click", function () {
+    if (timerId) { resetTimer(); return; }
+    timerEnd = Date.now() + 15 * 60 * 1000; timerBtn.classList.add("running");
+    timerBtn.innerHTML = '⏹ <span id="timer">15:00</span>'; timerEl = document.getElementById("timer");
+    timerId = setInterval(function () {
+      var left = timerEnd - Date.now(); timerEl.textContent = fmt(left);
+      if (left <= 0) { clearInterval(timerId); timerId = null; timerBtn.innerHTML = "✅ Done! (tap to reset)"; toast("Time's up! Nice work."); beep(); }
+    }, 250);
+  });
+
+  // Copy for Spark
+  function toast(msg) { var t = document.getElementById("toast"); t.textContent = msg; t.classList.add("show");
+    setTimeout(function () { t.classList.remove("show"); }, 1800); }
+  document.getElementById("copyBtn").addEventListener("click", function () {
+    if (!current) return;
+    var text = "Spun: " + current.name;
+    function legacy() { var ta = document.createElement("textarea"); ta.value = text; ta.style.position = "fixed"; ta.style.opacity = "0";
+      document.body.appendChild(ta); ta.select(); try { document.execCommand("copy"); } catch (e) {} document.body.removeChild(ta); toast("Copied: " + text); }
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(function () { toast("Copied: " + text); }, legacy);
+    else legacy();
+  });
+
+  canvas.addEventListener("click", spin);
+  spinBtn.addEventListener("click", spin);
+
+  fetch("items.json", { cache: "no-cache" }).then(function (r) { return r.json(); })
+    .then(function (data) { items = data; draw(); })
+    .catch(function () { document.querySelector(".sub").textContent = "Couldn't load the list. Pull to refresh."; });
+  draw();
+  window.__wheel = { spin: spin, items: function () { return items; } };
+})();
+</script>
+</body>
+</html>
