@@ -1,27 +1,105 @@
 [
-  {"id":"speed-learning","name":"Speed learning (Howard Berg)","label":"Speed learning","type":"skill",
-   "block":"Upload one of the Howard Berg session recordings and spend 15 minutes working through it with Learny to do the 16-minute drill more effectively. Later sessions: ongoing speed-learning practice built with Learny.",
-   "links":[],"currentLesson":null},
-  {"id":"backflip","name":"Backflip on land","label":"Backflip","type":"skill",
-   "block":"You can already backflip on a trampoline. First 15 minutes: look at MOTIVE School of Movement's flipping/tricking classes and adult (13+) open gym, sign the online waiver, and call 864-775-4844 to enroll. Later sessions: land-backflip progressions.",
-   "links":[{"title":"MOTIVE School of Movement","url":"https://www.motivemovement.org/"},{"title":"MOTIVE class schedules","url":"https://www.motivemovement.org/class-schedules"}],"currentLesson":null},
-  {"id":"napoleon-book","name":"Finish the Napoleon book by Oct 20","label":"Napoleon book","type":"skill",
-   "block":"Read the next chunk of the Napoleon Bonaparte book. Deadline: October 20.",
-   "links":[],"currentLesson":null},
-  {"id":"house-swap","name":"Swap houses with Nina for a weekend","label":"House swap w/ Nina","type":"one-off",
-   "block":"Plan it: pick a weekend, write house rules/notes for each other, and plan a few fun surprises to leave at each place.",
-   "links":[],"currentLesson":null},
-  {"id":"and-i-love-her","name":"\"And I Love Her\" (Beatles) on guitar","label":"And I Love Her","type":"skill",
-   "block":"Take one short section of the tab. Work out which finger plays each note and drill the transition into the next part slowly until it's smooth.",
-   "links":[],"currentLesson":null},
-  {"id":"moonlight-arpeggios","name":"Moonlight Sonata 3rd mvt. arpeggios at full speed","label":"Moonlight arpeggios","type":"skill",
-   "block":"Metronome speed-building: short fast bursts, small BPM bumps, play soft and even.",
-   "links":[{"title":"Taubman approach to the Presto agitato (tonebase)","url":"https://youtu.be/n2oIDlFVEzo"},{"title":"Danae Dörken's long-short exercise (2:56)","url":"https://youtu.be/TX0fgaL6kRU"}],
-   "currentLesson":"lessons/06-moonlight-arpeggios-lesson-01.md"},
-  {"id":"logos-play","name":"See a play at The Logos Theatre","label":"Logos play","type":"one-off",
-   "block":"Check what's showing at The Logos Theatre in Taylors, pick a date (maybe with Nina), and get tickets.",
-   "links":[{"title":"The Logos Theatre","url":"https://thelogostheatre.com/"}],"currentLesson":null},
-  {"id":"handstand","name":"Hold a handstand for a long time","label":"Handstand","type":"skill",
-   "block":"Wrist prep, then wall handstand holds (time them), then line/balance drills. Progress toward freestanding holds.",
-   "links":[],"currentLesson":null}
+  {
+    "id": "speed-learning",
+    "name": "Speed learning (Howard Berg)",
+    "label": "Speed learning",
+    "type": "skill",
+    "block": "Upload one of the Howard Berg session recordings and spend 15 minutes working through it with Learny to do the 16-minute drill more effectively. Later sessions: ongoing speed-learning practice built with Learny.",
+    "links": [],
+    "currentLesson": null
+  },
+  {
+    "id": "backflip",
+    "name": "Backflip on land",
+    "label": "Backflip",
+    "type": "skill",
+    "block": "You can already backflip on a trampoline. First 15 minutes: look at MOTIVE School of Movement's flipping/tricking classes and adult (13+) open gym, sign the online waiver, and call 864-775-4844 to enroll. Later sessions: land-backflip progressions.",
+    "links": [
+      {
+        "title": "MOTIVE School of Movement",
+        "url": "https://www.motivemovement.org/"
+      },
+      {
+        "title": "MOTIVE class schedules",
+        "url": "https://www.motivemovement.org/class-schedules"
+      }
+    ],
+    "currentLesson": null
+  },
+  {
+    "id": "napoleon-book",
+    "name": "Finish the Napoleon book by Oct 20",
+    "label": "Napoleon book",
+    "type": "skill",
+    "block": "Read the next chunk of the Napoleon Bonaparte book. Deadline: October 20.",
+    "links": [],
+    "currentLesson": null
+  },
+  {
+    "id": "house-swap",
+    "name": "Swap houses with Nina for a weekend",
+    "label": "House swap w/ Nina",
+    "type": "one-off",
+    "block": "Plan it: pick a weekend, write house rules/notes for each other, and plan a few fun surprises to leave at each place.",
+    "links": [],
+    "currentLesson": null
+  },
+  {
+    "id": "and-i-love-her",
+    "name": "\"And I Love Her\" (Beatles) on guitar",
+    "label": "And I Love Her",
+    "type": "skill",
+    "block": "Take one short section of the tab. Work out which finger plays each note and drill the transition into the next part slowly until it's smooth.",
+    "links": [],
+    "currentLesson": null
+  },
+  {
+    "id": "moonlight-arpeggios",
+    "name": "Moonlight Sonata 3rd mvt. arpeggios at full speed",
+    "label": "Moonlight arpeggios",
+    "type": "skill",
+    "block": "Metronome speed-building: short fast bursts, small BPM bumps, play soft and even.",
+    "links": [
+      {
+        "title": "Taubman approach to the Presto agitato (tonebase)",
+        "url": "https://youtu.be/n2oIDlFVEzo"
+      },
+      {
+        "title": "Danae Dörken's long-short exercise (2:56)",
+        "url": "https://youtu.be/TX0fgaL6kRU"
+      }
+    ],
+    "currentLesson": "lessons/06-moonlight-arpeggios-lesson-01.md"
+  },
+  {
+    "id": "logos-play",
+    "name": "See a play at The Logos Theatre",
+    "label": "Logos play",
+    "type": "one-off",
+    "block": "No Taylors shows are announced yet (as of Oct 9, 2026). Call the box office (864-268-9342) about the next show and join the email list, then plan a Fri/Sat 7pm date with Nina. Or book a backstage puppet tour (Tue/Thu).",
+    "links": [
+      {
+        "title": "The Logos Theatre",
+        "url": "https://thelogostheatre.com/"
+      },
+      {
+        "title": "FAQ (parking, tickets, tours)",
+        "url": "https://thelogostheatre.com/frequently-asked-questions/"
+      },
+      {
+        "title": "Logos on Tour (current shows)",
+        "url": "https://thelogostheatre.com/the-logos-theatre-on-tour/"
+      }
+    ],
+    "currentLesson": "lessons/logos-play.md"
+  },
+  {
+    "id": "handstand",
+    "name": "Hold a handstand for a long time",
+    "label": "Handstand",
+    "type": "skill",
+    "block": "Wrist prep, then wall handstand holds (time them), then line/balance drills. Progress toward freestanding holds.",
+    "links": [],
+    "currentLesson": null
+  }
 ]
