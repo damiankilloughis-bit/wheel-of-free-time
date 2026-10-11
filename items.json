@@ -98,8 +98,17 @@
     "name": "Hold a handstand for a long time",
     "label": "Handstand",
     "type": "skill",
-    "block": "Wrist prep, then wall handstand holds (time them), then line/balance drills. Progress toward freestanding holds.",
-    "links": [],
-    "currentLesson": null
+    "block": "Lesson 2: stop falling back. Do wall drills for weight shift (heel of palm vs. fingers, shoulders over hands, hips stacked), then filmed kick-ups.",
+    "links": [
+      {
+        "title": "Paul Twyman: Fix your handstand balance",
+        "url": "https://www.youtube.com/watch?v=sjzV_ACPvDA"
+      },
+      {
+        "title": "Shana Meyerson: Stop falling out of handstand",
+        "url": "https://www.youtube.com/watch?v=9tNHOXOzMRE"
+      }
+    ],
+    "currentLesson": "lessons/handstand-02.md"
   }
 ]
