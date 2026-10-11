@@ -29,6 +29,11 @@
   #spin { display:block; margin:16px auto; font-size:1.3rem; padding:16px 48px; background:#ffca3a; color:#1b1b2f;
           box-shadow:0 4px 0 #b88a00; }
   #spin:disabled { opacity:.5; }
+  .pick { max-width:680px; margin:4px auto 10px; text-align:center; }
+  .picktitle { margin:0 0 8px; opacity:.75; font-size:.95rem; }
+  #chips { display:flex; flex-wrap:wrap; gap:8px; justify-content:center; }
+  #chips button { padding:9px 14px; border-radius:999px; color:#fff; font-size:.95rem; text-shadow:0 1px 2px rgba(0,0,0,.6); }
+  #chips button:disabled { opacity:.55; }
   #result { display:none; max-width:680px; margin:10px auto; background:#26264a; border-radius:18px; padding:18px; }
   #result h2 { margin:0 0 4px; font-size:1.35rem; }
   .tag { display:inline-block; font-size:.75rem; padding:2px 8px; border-radius:999px; background:#3d3d70; margin-bottom:10px; }
@@ -55,6 +60,10 @@
   <canvas id="wheel" width="920" height="920" aria-label="Tap to spin"></canvas>
 </div>
 <button id="spin">SPIN</button>
+<div class="pick">
+  <p class="picktitle">…or pick one</p>
+  <div id="chips"></div>
+</div>
 
 <div id="result">
   <h2 id="rName"></h2>
@@ -110,27 +119,48 @@
     ctx.fillText("SPIN", c, c);
   }
 
-  function spin() {
-    if (spinning || !items.length) return;
-    spinning = true; spinBtn.disabled = true;
-    var n = items.length, seg = 2 * Math.PI / n;
-    var pick = randInt(n);
-    var jitter = (randFloat() - 0.5) * seg * 0.7;                 // land somewhere inside the slice, not on an edge
-    var target = -Math.PI / 2 - (pick + 0.5) * seg + jitter;       // slice centre under the top pointer
-    var twoPi = 2 * Math.PI;
+  function animateTo(pick, dur, extraTurns, jitter) {
+    spinning = true; spinBtn.disabled = true; setChipsDisabled(true);
+    var n = items.length, seg = 2 * Math.PI / n, twoPi = 2 * Math.PI;
+    var target = -Math.PI / 2 - (pick + 0.5) * seg + jitter;       // slice under the top pointer
     var delta = ((target - rotation) % twoPi + twoPi) % twoPi;
-    var start = rotation, end = rotation + delta + twoPi * (5 + randInt(2));
-    var dur = 4200, t0 = null;
-    function ease(t) { return 1 - Math.pow(1 - t, 4); }
+    if (extraTurns === 0 && delta > Math.PI) delta -= twoPi;       // direct pick: take the short way round
+    var start = rotation, end = rotation + delta + twoPi * extraTurns, t0 = null;
+    function ease(t) { return 1 - Math.pow(1 - t, extraTurns ? 4 : 3); }
     function frame(ts) {
       if (t0 === null) t0 = ts;
-      var t = Math.min(1, (ts - t0) / dur);
+      var t = dur > 0 ? Math.min(1, (ts - t0) / dur) : 1;
       rotation = start + (end - start) * ease(t);
       draw();
       if (t < 1) requestAnimationFrame(frame);
-      else { rotation = end % twoPi; spinning = false; spinBtn.disabled = false; showResult(items[pick]); }
+      else { rotation = ((end % twoPi) + twoPi) % twoPi; spinning = false; spinBtn.disabled = false; setChipsDisabled(false); showResult(items[pick]); }
     }
     requestAnimationFrame(frame);
+  }
+
+  function spin() {
+    if (spinning || !items.length) return;
+    var n = items.length, seg = 2 * Math.PI / n;
+    var pick = randInt(n);                                         // uniform, unweighted
+    var jitter = (randFloat() - 0.5) * seg * 0.7;                  // land inside the slice, not on an edge
+    animateTo(pick, 4200, 5 + randInt(2), jitter);
+  }
+
+  function choose(i) {
+    if (spinning || !items[i]) return;
+    animateTo(i, 1000, 0, 0);
+  }
+
+  function setChipsDisabled(d) { document.querySelectorAll("#chips button").forEach(function (b) { b.disabled = d; }); }
+  function renderChips() {
+    var box = document.getElementById("chips"); box.innerHTML = "";
+    items.forEach(function (it, i) {
+      var b = document.createElement("button");
+      b.type = "button"; b.textContent = it.label;
+      b.style.background = COLORS[i % COLORS.length];
+      b.addEventListener("click", function () { choose(i); });
+      box.appendChild(b);
+    });
   }
 
   function esc(s) { return String(s).replace(/[&<>"']/g, function (ch) { return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[ch]; }); }
@@ -200,10 +230,10 @@
   spinBtn.addEventListener("click", spin);
 
   fetch("items.json", { cache: "no-cache" }).then(function (r) { return r.json(); })
-    .then(function (data) { items = data; draw(); })
+    .then(function (data) { items = data; draw(); renderChips(); })
     .catch(function () { document.querySelector(".sub").textContent = "Couldn't load the list. Pull to refresh."; });
   draw();
-  window.__wheel = { spin: spin, items: function () { return items; } };
+  window.__wheel = { spin: spin, choose: choose, items: function () { return items; }, rotation: function () { return rotation; } };
 })();
 </script>
 </body>
