@@ -110,5 +110,14 @@
       }
     ],
     "currentLesson": "lessons/handstand-02.md"
+  },
+  {
+    "id": "master-stokes",
+    "name": "Edit Master Stokes so he can run on his own",
+    "label": "Master Stokes",
+    "type": "project",
+    "block": "One focused session making Master Stokes (your trading-specialist Grok Bot) run more autonomously. Review his setup and instructions, define what he should do on his own, and set up or refine one of his routines.",
+    "links": [],
+    "currentLesson": null
   }
 ]

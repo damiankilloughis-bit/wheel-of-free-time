@@ -80,7 +80,7 @@
 <script>
 (function () {
   "use strict";
-  var COLORS = ["#ff595e","#ff924c","#ffca3a","#8ac926","#1982c4","#6a4c93","#f15bb5","#00bbf9","#e76f51","#2a9d8f"];
+  var COLORS = ["#ff595e","#ff924c","#ffca3a","#8ac926","#1982c4","#6a4c93","#f15bb5","#00bbf9","#9d4edd","#2a9d8f"];
   var canvas = document.getElementById("wheel");
   var ctx = canvas.getContext("2d");
   var spinBtn = document.getElementById("spin");
@@ -173,7 +173,7 @@
   function showResult(item) {
     current = item; resetTimer();
     document.getElementById("rName").textContent = item.name;
-    document.getElementById("rType").textContent = item.type === "one-off" ? "fun one-off" : "skill";
+    document.getElementById("rType").textContent = item.type === "one-off" ? "fun one-off" : (item.type || "skill");
     var ul = document.getElementById("rLinks");
     ul.innerHTML = (item.links || []).map(function (l) {
       return '<li><a href="' + esc(l.url) + '" target="_blank" rel="noopener">' + esc(l.title) + "</a></li>";
