@@ -29,8 +29,11 @@
   #spin { display:block; margin:16px auto; font-size:1.3rem; padding:16px 48px; background:#ffca3a; color:#1b1b2f;
           box-shadow:0 4px 0 #b88a00; }
   #spin:disabled { opacity:.5; }
+  #now { text-align:center; font-weight:800; font-size:1.25rem; min-height:1.6em; margin:2px auto 16px; padding:4px 14px;
+         width:fit-content; max-width:92vw; border-radius:999px; color:#fff; text-shadow:0 1px 3px rgba(0,0,0,.6); transition:background .12s; }
   #result { display:none; max-width:680px; margin:10px auto; background:#26264a; border-radius:18px; padding:18px; }
-  #result h2 { margin:0 0 4px; font-size:1.35rem; }
+  #result h2 { margin:0 0 4px; font-size:1.35rem; cursor:pointer; }
+  .openLesson { display:block; width:100%; margin:6px 0 4px; background:#ffca3a; color:#1b1b2f; font-size:1.05rem; }
   .tag { display:inline-block; font-size:.75rem; padding:2px 8px; border-radius:999px; background:#3d3d70; margin-bottom:10px; }
   .row { display:flex; gap:10px; flex-wrap:wrap; margin:12px 0; }
   .row button { flex:1 1 140px; background:#1982c4; color:#fff; }
@@ -50,6 +53,7 @@
 <body>
 <h1>🎡 Wheel of Free Time</h1>
 <p class="sub">Got 15 minutes? Flick the wheel (or tap SPIN).</p>
+<div id="now" aria-live="polite">&nbsp;</div>
 <div class="wheelwrap">
   <div class="pointer"></div>
   <canvas id="wheel" width="920" height="920" aria-label="Tap to spin"></canvas>
@@ -57,8 +61,9 @@
 <button id="spin">SPIN</button>
 
 <div id="result">
-  <h2 id="rName"></h2>
+  <h2 id="rName" title="Tap to open the lesson"></h2>
   <span class="tag" id="rType"></span>
+  <button id="openLesson" class="openLesson">📖 Open lesson</button>
   <div class="row">
     <button id="timerBtn">⏱ Start <span id="timer">15:00</span></button>
     <button id="copyBtn">📋 Copy for Spark</button>
@@ -148,6 +153,17 @@
     ctx.beginPath(); ctx.arc(c, c, 54, 0, 2 * Math.PI); ctx.fillStyle = "#fff"; ctx.fill();
     ctx.fillStyle = "#1b1b2f"; ctx.font = "800 30px system-ui, sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
     ctx.fillText("SPIN", c, c);
+    updateBanner();
+  }
+  var bannerEl = null, bannerIdx = -2, bannerBlur = null;
+  function updateBanner() {
+    if (!items.length) return;
+    bannerEl = bannerEl || document.getElementById("now");
+    var idx = sliceUnderPointer(), blur = visSpeed > 60;
+    if (idx === bannerIdx && blur === bannerBlur) return;
+    bannerIdx = idx; bannerBlur = blur;
+    bannerEl.textContent = blur ? "🌀 spinning…" : "▼ " + items[idx].label;
+    bannerEl.style.background = blur ? "#3d3d70" : COLORS[idx % COLORS.length];
   }
 
   var TWO_PI = 2 * Math.PI;
@@ -210,10 +226,10 @@
   // ---- finger physics (flick, inertia, add speed, hold to brake) ----
   var MAX_OMEGA = 150;         // rad/s (~24 turns per second)
   var MIN_FLICK = 1.2;         // rad/s needed on release to count as a flick
-  var MIN_TOTAL = TWO_PI;      // at least one full turn before a result counts
   var fK = 0.25, fC = 1.0;     // friction (fixed, deterministic): domega/dt = -(fK*|omega| + fC)
   var BK = 6, BC = 12;         // brake friction while a finger is held still on the wheel
-  var session = false, total = 0;
+  var session = false, total = 0;  // total = |rotation| moved by hand or coasting since last rest
+  var MIN_MOVE = 0.15;         // rad (~9°): smaller nudges never pop a result
   var loopOn = false, lastTs = null;
   var ptr = null;              // active pointer state
 
@@ -232,7 +248,7 @@
     return Math.atan2(e.clientY - (r.top + r.height / 2), e.clientX - (r.left + r.width / 2));
   }
   function wrap(d) { while (d > Math.PI) d -= TWO_PI; while (d < -Math.PI) d += TWO_PI; return d; }
-  function rotateBy(d) { rotation += d; if (session) total += Math.abs(d); }
+  function rotateBy(d) { rotation += d; total += Math.abs(d); }
 
   function startLoop() { if (!loopOn) { loopOn = true; lastTs = null; requestAnimationFrame(loop); } }
   function loop(ts) {
@@ -249,9 +265,10 @@
   }
   function comeToRest() {
     rotation = ((rotation % TWO_PI) + TWO_PI) % TWO_PI;
-    var show = session && total >= MIN_TOTAL;
+    var show = total >= MIN_MOVE;
     session = false; total = 0; spinning = false; setBusy(false);
-    if (show && items.length) showResult(items[sliceUnderPointer()]);
+    draw();
+    if (show && items.length) showResult(items[sliceUnderPointer()]);   // same path as the SPIN button
   }
 
   canvas.addEventListener("pointerdown", function (e) {
@@ -295,14 +312,13 @@
       spinning = false; setBusy(false); spin(); return;
     }
     if (Math.abs(v) >= MIN_FLICK) {
-      if (!session) { session = true; total = 0; }
+      session = true;
       omega = Math.max(-MAX_OMEGA, Math.min(MAX_OMEGA, omega + v)); // flicking a spinning wheel adds speed
       startLoop();
     } else if (omega !== 0) {
       startLoop();                                                   // let go after a light touch: keep coasting
     } else {
-      omega = 0; session = false; total = 0; spinning = false; setBusy(false);
-      rotation = ((rotation % TWO_PI) + TWO_PI) % TWO_PI;           // released a still wheel: no result
+      omega = 0; comeToRest();                                      // released a still wheel: result if it was moved/aimed
     }
   }
   canvas.addEventListener("pointerup", release);
@@ -315,27 +331,38 @@
   }
   function fixLinks(el) { el.querySelectorAll("a").forEach(function (a) { a.target = "_blank"; a.rel = "noopener"; }); }
 
+  var lessonState = "none";    // none | loading | loaded | failed
+  function loadLesson(item) {
+    var lesson = document.getElementById("lesson");
+    var fallback = "<h3>Your 15 minutes</h3><p>" + esc(item.block) + "</p>";
+    if (!item.currentLesson) { lesson.innerHTML = fallback; lessonState = "none"; return; }
+    lessonState = "loading";
+    lesson.innerHTML = "<p>Loading lesson…</p>";
+    fetch(item.currentLesson + "?v=" + Date.now(), { cache: "no-store" })
+      .then(function (r) { if (!r.ok) throw new Error(r.status); return r.text(); })
+      .then(function (t) { if (current === item) { lesson.innerHTML = md(t); fixLinks(lesson); lessonState = "loaded"; } })
+      .catch(function () { if (current === item) { lessonState = "failed";
+        lesson.innerHTML = "<p>⚠️ Couldn't load the lesson. Tap <b>Open lesson</b> to retry.</p>" + fallback; } });
+  }
+  function openLesson() {
+    if (!current) return;
+    if (current.currentLesson && lessonState !== "loaded" && lessonState !== "loading") loadLesson(current);
+    document.getElementById("lesson").scrollIntoView({ behavior: "smooth", block: "start" });
+  }
   function showResult(item) {
     current = item; resetTimer();
     document.getElementById("rName").textContent = item.name;
     document.getElementById("rType").textContent = item.type === "one-off" ? "fun one-off" : (item.type || "skill");
+    document.getElementById("openLesson").textContent = item.currentLesson ? "📖 Open lesson" : "📝 Show 15-minute plan";
     var ul = document.getElementById("rLinks");
     ul.innerHTML = (item.links || []).map(function (l) {
       return '<li><a href="' + esc(l.url) + '" target="_blank" rel="noopener">' + esc(l.title) + "</a></li>";
     }).join("");
-    var lesson = document.getElementById("lesson");
-    var fallback = "<h3>Your 15 minutes</h3><p>" + esc(item.block) + "</p>";
-    lesson.innerHTML = fallback;
     var box = document.getElementById("result"); box.style.display = "block";
-    if (item.currentLesson) {
-      lesson.innerHTML = "<p>Loading lesson…</p>";
-      fetch(item.currentLesson, { cache: "no-cache" })
-        .then(function (r) { if (!r.ok) throw new Error(r.status); return r.text(); })
-        .then(function (t) { if (current === item) { lesson.innerHTML = md(t); fixLinks(lesson); } })
-        .catch(function () { if (current === item) lesson.innerHTML = fallback; });
-    }
+    loadLesson(item);
     setTimeout(function () { box.scrollIntoView({ behavior: "smooth", block: "start" }); }, 150);
   }
+
 
   // 15-minute timer
   var timerEnd = null, timerId = null, timerBtn = document.getElementById("timerBtn"), timerEl = document.getElementById("timer");
@@ -372,12 +399,14 @@
   });
 
   spinBtn.addEventListener("click", spin);
+  document.getElementById("openLesson").addEventListener("click", openLesson);
+  document.getElementById("rName").addEventListener("click", openLesson);
 
   fetch("items.json", { cache: "no-cache" }).then(function (r) { return r.json(); })
     .then(function (data) { items = data; draw(); lastSlice = sliceUnderPointer(); })
     .catch(function () { document.querySelector(".sub").textContent = "Couldn't load the list. Pull to refresh."; });
   draw();
-  window.__wheel = { spin: spin, items: function () { return items; }, rotation: function () { return rotation; }, omega: function () { return omega; }, under: sliceUnderPointer, maxOmega: MAX_OMEGA, visSpeed: function () { return visSpeed; }, _setRotation: function (r) { rotation = r; draw(); }, _fling: function (w) { session = true; total = 0; omega = w; spinning = true; setBusy(true); startLoop(); } };
+  window.__wheel = { spin: spin, items: function () { return items; }, rotation: function () { return rotation; }, omega: function () { return omega; }, under: sliceUnderPointer, maxOmega: MAX_OMEGA, visSpeed: function () { return visSpeed; }, _setRotation: function (r) { rotation = r; draw(); }, lessonState: function () { return lessonState; }, _fling: function (w) { session = true; total = 0; omega = w; spinning = true; setBusy(true); startLoop(); } };
 })();
 </script>
 </body>
