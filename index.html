@@ -21,7 +21,7 @@
   h1 { text-align:center; font-size:1.5rem; margin:18px 0 6px; }
   .sub { text-align:center; opacity:.7; margin:0 0 10px; font-size:.95rem; }
   .wheelwrap { position:relative; width:min(92vw, 460px); margin:0 auto; aspect-ratio:1; }
-  canvas { width:100%; height:100%; display:block; touch-action: manipulation; cursor:pointer; }
+  canvas { width:100%; height:100%; display:block; touch-action: none; cursor:grab; user-select:none; -webkit-user-select:none; -webkit-touch-callout:none; }
   .pointer { position:absolute; top:-6px; left:50%; transform:translateX(-50%); width:0; height:0;
              border-left:18px solid transparent; border-right:18px solid transparent; border-top:34px solid #fff;
              filter: drop-shadow(0 2px 3px rgba(0,0,0,.6)); z-index:2; }
@@ -29,11 +29,6 @@
   #spin { display:block; margin:16px auto; font-size:1.3rem; padding:16px 48px; background:#ffca3a; color:#1b1b2f;
           box-shadow:0 4px 0 #b88a00; }
   #spin:disabled { opacity:.5; }
-  .pick { max-width:680px; margin:4px auto 10px; text-align:center; }
-  .picktitle { margin:0 0 8px; opacity:.75; font-size:.95rem; }
-  #chips { display:flex; flex-wrap:wrap; gap:8px; justify-content:center; }
-  #chips button { padding:9px 14px; border-radius:999px; color:#fff; font-size:.95rem; text-shadow:0 1px 2px rgba(0,0,0,.6); }
-  #chips button:disabled { opacity:.55; }
   #result { display:none; max-width:680px; margin:10px auto; background:#26264a; border-radius:18px; padding:18px; }
   #result h2 { margin:0 0 4px; font-size:1.35rem; }
   .tag { display:inline-block; font-size:.75rem; padding:2px 8px; border-radius:999px; background:#3d3d70; margin-bottom:10px; }
@@ -54,16 +49,12 @@
 </head>
 <body>
 <h1>🎡 Wheel of Free Time</h1>
-<p class="sub">Got 15 minutes? Tap the wheel.</p>
+<p class="sub">Got 15 minutes? Flick the wheel (or tap SPIN).</p>
 <div class="wheelwrap">
   <div class="pointer"></div>
   <canvas id="wheel" width="920" height="920" aria-label="Tap to spin"></canvas>
 </div>
 <button id="spin">SPIN</button>
-<div class="pick">
-  <p class="picktitle">…or pick one</p>
-  <div id="chips"></div>
-</div>
 
 <div id="result">
   <h2 id="rName"></h2>
@@ -119,49 +110,159 @@
     ctx.fillText("SPIN", c, c);
   }
 
+  var TWO_PI = 2 * Math.PI;
+  function sliceUnderPointer() {
+    var n = items.length || 1, seg = TWO_PI / n;
+    return Math.floor((((-Math.PI / 2 - rotation) % TWO_PI + TWO_PI) % TWO_PI) / seg) % n;
+  }
+  function setBusy(b) { spinBtn.disabled = b; }
+
+  // ---- tick feedback as slices pass the pointer (throttled) ----
+  var lastSlice = -1, lastTick = 0, audioCtx = null;
+  function ensureAudio() {
+    try { if (!audioCtx) { var A = window.AudioContext || window.webkitAudioContext; if (A) audioCtx = new A(); }
+          if (audioCtx && audioCtx.state === "suspended") audioCtx.resume(); } catch (e) {}
+  }
+  function tick() {
+    var idx = sliceUnderPointer();
+    if (idx === lastSlice) return;
+    lastSlice = idx;
+    var now = performance.now();
+    if (now - lastTick < 55) return;
+    lastTick = now;
+    if (navigator.vibrate) { try { navigator.vibrate(6); } catch (e) {} }
+    if (audioCtx && audioCtx.state === "running") {
+      try { var o = audioCtx.createOscillator(), g = audioCtx.createGain(), t = audioCtx.currentTime;
+        o.type = "square"; o.frequency.value = 1800; g.gain.setValueAtTime(0.04, t); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.03);
+        o.connect(g); g.connect(audioCtx.destination); o.start(t); o.stop(t + 0.035); } catch (e) {}
+    }
+  }
+
+  // ---- SPIN button: uniform crypto pick, tweened to land on it ----
+  var tweening = false;
   function animateTo(pick, dur, extraTurns, jitter) {
-    spinning = true; spinBtn.disabled = true; setChipsDisabled(true);
-    var n = items.length, seg = 2 * Math.PI / n, twoPi = 2 * Math.PI;
+    tweening = true; spinning = true; setBusy(true);
+    var n = items.length, seg = TWO_PI / n;
     var target = -Math.PI / 2 - (pick + 0.5) * seg + jitter;       // slice under the top pointer
-    var delta = ((target - rotation) % twoPi + twoPi) % twoPi;
-    if (extraTurns === 0 && delta > Math.PI) delta -= twoPi;       // direct pick: take the short way round
-    var start = rotation, end = rotation + delta + twoPi * extraTurns, t0 = null;
-    function ease(t) { return 1 - Math.pow(1 - t, extraTurns ? 4 : 3); }
+    var delta = ((target - rotation) % TWO_PI + TWO_PI) % TWO_PI;
+    var start = rotation, end = rotation + delta + TWO_PI * extraTurns, t0 = null;
+    function ease(t) { return 1 - Math.pow(1 - t, 4); }
     function frame(ts) {
       if (t0 === null) t0 = ts;
       var t = dur > 0 ? Math.min(1, (ts - t0) / dur) : 1;
       rotation = start + (end - start) * ease(t);
-      draw();
+      draw(); tick();
       if (t < 1) requestAnimationFrame(frame);
-      else { rotation = ((end % twoPi) + twoPi) % twoPi; spinning = false; spinBtn.disabled = false; setChipsDisabled(false); showResult(items[pick]); }
+      else { rotation = ((end % TWO_PI) + TWO_PI) % TWO_PI; tweening = false; spinning = false; setBusy(false); showResult(items[pick]); }
     }
     requestAnimationFrame(frame);
   }
-
   function spin() {
     if (spinning || !items.length) return;
-    var n = items.length, seg = 2 * Math.PI / n;
+    var n = items.length, seg = TWO_PI / n;
     var pick = randInt(n);                                         // uniform, unweighted
     var jitter = (randFloat() - 0.5) * seg * 0.7;                  // land inside the slice, not on an edge
     animateTo(pick, 4200, 5 + randInt(2), jitter);
   }
 
-  function choose(i) {
-    if (spinning || !items[i]) return;
-    animateTo(i, 1000, 0, 0);
+  // ---- finger physics (flick, inertia, add speed, hold to brake) ----
+  var MAX_OMEGA = 30;          // rad/s (~4.8 turns per second)
+  var MIN_FLICK = 1.2;         // rad/s needed on release to count as a flick
+  var STOP_OMEGA = 0.08;       // below this the wheel is at rest
+  var MIN_TOTAL = TWO_PI;      // at least one full turn before a result counts
+  var omega = 0;               // angular velocity, rad/s (positive = clockwise)
+  var fK = 0.6, fC = 0.5;      // friction: proportional + constant, randomized per flick
+  var session = false, total = 0;
+  var loopOn = false, lastTs = null;
+  var ptr = null;              // active pointer state
+
+  function randomizeFriction() { fK = 0.45 + randFloat() * 0.4; fC = 0.3 + randFloat() * 0.5; }
+  function angleAt(e) {
+    var r = canvas.getBoundingClientRect();
+    return Math.atan2(e.clientY - (r.top + r.height / 2), e.clientX - (r.left + r.width / 2));
+  }
+  function wrap(d) { while (d > Math.PI) d -= TWO_PI; while (d < -Math.PI) d += TWO_PI; return d; }
+  function rotateBy(d) { rotation += d; if (session) total += Math.abs(d); }
+
+  function startLoop() { if (!loopOn) { loopOn = true; lastTs = null; requestAnimationFrame(loop); } }
+  function loop(ts) {
+    if (lastTs === null) lastTs = ts;
+    var dt = Math.min(0.05, (ts - lastTs) / 1000); lastTs = ts;
+    if (omega !== 0) {
+      var braking = ptr && (ts - ptr.lastMove) > 90;                  // finger held still = brake
+      var k = braking ? 7 : fK, c = braking ? 10 : fC;
+      var mag = Math.abs(omega), sign = omega > 0 ? 1 : -1;
+      mag = Math.max(0, mag - (k * mag + c) * dt);
+      omega = sign * mag;
+      rotateBy(omega * dt);
+      if (mag < STOP_OMEGA) omega = 0;
+    }
+    draw(); tick();
+    if (omega === 0 && !ptr) { loopOn = false; comeToRest(); return; }
+    if (omega === 0 && ptr) { loopOn = false; return; }               // held still; pointer handlers take over
+    requestAnimationFrame(loop);
+  }
+  function comeToRest() {
+    rotation = ((rotation % TWO_PI) + TWO_PI) % TWO_PI;
+    var show = session && total >= MIN_TOTAL;
+    session = false; total = 0; spinning = false; setBusy(false);
+    if (show && items.length) showResult(items[sliceUnderPointer()]);
   }
 
-  function setChipsDisabled(d) { document.querySelectorAll("#chips button").forEach(function (b) { b.disabled = d; }); }
-  function renderChips() {
-    var box = document.getElementById("chips"); box.innerHTML = "";
-    items.forEach(function (it, i) {
-      var b = document.createElement("button");
-      b.type = "button"; b.textContent = it.label;
-      b.style.background = COLORS[i % COLORS.length];
-      b.addEventListener("click", function () { choose(i); });
-      box.appendChild(b);
-    });
+  canvas.addEventListener("pointerdown", function (e) {
+    if (tweening || !items.length) return;
+    ensureAudio();
+    e.preventDefault();
+    try { canvas.setPointerCapture(e.pointerId); } catch (err) {}
+    var now = performance.now(), a = angleAt(e);
+    ptr = { id: e.pointerId, angle: a, startX: e.clientX, startY: e.clientY, t0: now, lastMove: now,
+            dragging: false, wasMoving: omega !== 0, samples: [{ t: now, a: 0 }], acc: 0 };
+    spinning = true; setBusy(true);
+    canvas.style.cursor = "grabbing";
+    if (omega !== 0) startLoop();
+  });
+  canvas.addEventListener("pointermove", function (e) {
+    if (!ptr || e.pointerId !== ptr.id) return;
+    e.preventDefault();
+    var now = performance.now(), a = angleAt(e), d = wrap(a - ptr.angle);
+    ptr.angle = a;
+    if (!ptr.dragging) {
+      var dx = e.clientX - ptr.startX, dy = e.clientY - ptr.startY;
+      if (dx * dx + dy * dy < 64) return;                            // < 8px: still a tap / hold
+      ptr.dragging = true;
+    }
+    ptr.lastMove = now;
+    ptr.acc += d;
+    rotateBy(d);                                                     // wheel follows the finger (on top of any coasting)
+    ptr.samples.push({ t: now, a: ptr.acc });
+    while (ptr.samples.length > 2 && now - ptr.samples[0].t > 100) ptr.samples.shift();
+    if (omega === 0) draw();
+    tick();
+  });
+  function release(e) {
+    if (!ptr || (e && e.pointerId !== ptr.id)) return;
+    var now = performance.now(), p = ptr;
+    ptr = null; canvas.style.cursor = "grab";
+    // finger velocity over the last ~100 ms
+    var v = 0, s0 = p.samples[0], s1 = p.samples[p.samples.length - 1];
+    if (p.dragging && now - s1.t < 80 && s1.t - s0.t > 8) v = (s1.a - s0.a) / ((s1.t - s0.t) / 1000);
+    if (!p.dragging && !p.wasMoving && now - p.t0 < 300) {           // plain tap on a still wheel = random spin
+      spinning = false; setBusy(false); spin(); return;
+    }
+    if (Math.abs(v) >= MIN_FLICK) {
+      if (!session) { session = true; total = 0; }
+      omega = Math.max(-MAX_OMEGA, Math.min(MAX_OMEGA, omega + v)); // flicking a spinning wheel adds speed
+      randomizeFriction();
+      startLoop();
+    } else if (omega !== 0 && Math.abs(omega) >= STOP_OMEGA) {
+      startLoop();                                                   // let go after a light touch: keep coasting
+    } else {
+      omega = 0; session = false; total = 0; spinning = false; setBusy(false);
+      rotation = ((rotation % TWO_PI) + TWO_PI) % TWO_PI;           // released a still wheel: no result
+    }
   }
+  canvas.addEventListener("pointerup", release);
+  canvas.addEventListener("pointercancel", release);
 
   function esc(s) { return String(s).replace(/[&<>"']/g, function (ch) { return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[ch]; }); }
   function md(text) {
@@ -226,14 +327,13 @@
     else legacy();
   });
 
-  canvas.addEventListener("click", spin);
   spinBtn.addEventListener("click", spin);
 
   fetch("items.json", { cache: "no-cache" }).then(function (r) { return r.json(); })
-    .then(function (data) { items = data; draw(); renderChips(); })
+    .then(function (data) { items = data; draw(); lastSlice = sliceUnderPointer(); })
     .catch(function () { document.querySelector(".sub").textContent = "Couldn't load the list. Pull to refresh."; });
   draw();
-  window.__wheel = { spin: spin, choose: choose, items: function () { return items; }, rotation: function () { return rotation; } };
+  window.__wheel = { spin: spin, items: function () { return items; }, rotation: function () { return rotation; }, omega: function () { return omega; }, under: sliceUnderPointer, maxOmega: MAX_OMEGA };
 })();
 </script>
 </body>
