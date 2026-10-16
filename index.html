@@ -79,6 +79,7 @@
   var rotation = 0;           // radians
   var spinning = false;
   var current = null;
+  var omega = 0;              // angular velocity, rad/s (positive = clockwise)
 
   function randInt(n) {       // uniform integer in [0, n) via rejection sampling
     var buf = new Uint32Array(1), limit = Math.floor(0x100000000 / n) * n;
@@ -87,23 +88,62 @@
   }
   function randFloat() { var b = new Uint32Array(1); crypto.getRandomValues(b); return b[0] / 0x100000000; }
 
-  function draw() {
+  // Wheel art is rendered once into offscreen canvases (with and without labels),
+  // then drawn rotated each frame. Above a speed threshold, faded trailing copies give motion blur.
+  var artFull = null, artPlain = null, artKey = "";
+  function buildArt() {
     var W = canvas.width, c = W / 2, r = c - 8, n = items.length || 1, seg = 2 * Math.PI / n;
+    function make(withLabels) {
+      var oc = document.createElement("canvas"); oc.width = W; oc.height = W;
+      var g = oc.getContext("2d");
+      for (var i = 0; i < n; i++) {
+        var a0 = i * seg;
+        g.beginPath(); g.moveTo(c, c); g.arc(c, c, r, a0, a0 + seg); g.closePath();
+        g.fillStyle = COLORS[i % COLORS.length]; g.fill();
+        g.lineWidth = 4; g.strokeStyle = "#1b1b2f"; g.stroke();
+        if (!withLabels || !items[i]) continue;
+        g.save(); g.translate(c, c); g.rotate(a0 + seg / 2);
+        g.textAlign = "right"; g.textBaseline = "middle";
+        g.fillStyle = "#fff"; g.shadowColor = "rgba(0,0,0,.55)"; g.shadowBlur = 6;
+        var label = items[i].label, size = 40;
+        g.font = "700 " + size + "px system-ui, sans-serif";
+        while (g.measureText(label).width > r - 110 && size > 18) { size -= 2; g.font = "700 " + size + "px system-ui, sans-serif"; }
+        g.fillText(label, r - 22, 0);
+        g.restore();
+      }
+      return oc;
+    }
+    artFull = make(true); artPlain = make(false);
+    artKey = items.map(function (it) { return it.label; }).join("|");
+  }
+  var lastDrawRot = 0, lastDrawT = 0, visSpeed = 0;   // smoothed on-screen angular speed (rad/s)
+  var BLUR_START = 18, LABEL_FADE_END = 45;
+  function blit(img, angle, alpha) {
+    var W = canvas.width, c = W / 2;
+    ctx.save(); ctx.globalAlpha = alpha; ctx.translate(c, c); ctx.rotate(angle); ctx.drawImage(img, -c, -c); ctx.restore();
+  }
+  function draw() {
+    var key = items.map(function (it) { return it.label; }).join("|");
+    if (!artFull || key !== artKey) buildArt();
+    var now = performance.now(), dt = (now - lastDrawT) / 1000;
+    if (dt > 0 && dt < 0.25) {
+      var inst = Math.abs(rotation - lastDrawRot) / dt;
+      visSpeed = visSpeed * 0.6 + inst * 0.4;
+    } else if (dt >= 0.25) visSpeed = 0;
+    lastDrawRot = rotation; lastDrawT = now;
+    var W = canvas.width, c = W / 2;
     ctx.clearRect(0, 0, W, W);
-    for (var i = 0; i < n; i++) {
-      var a0 = rotation + i * seg;
-      ctx.beginPath(); ctx.moveTo(c, c); ctx.arc(c, c, r, a0, a0 + seg); ctx.closePath();
-      ctx.fillStyle = COLORS[i % COLORS.length]; ctx.fill();
-      ctx.lineWidth = 4; ctx.strokeStyle = "#1b1b2f"; ctx.stroke();
-      if (!items[i]) continue;
-      ctx.save(); ctx.translate(c, c); ctx.rotate(a0 + seg / 2);
-      ctx.textAlign = "right"; ctx.textBaseline = "middle";
-      ctx.fillStyle = "#fff"; ctx.shadowColor = "rgba(0,0,0,.55)"; ctx.shadowBlur = 6;
-      var label = items[i].label, size = 40;
-      ctx.font = "700 " + size + "px system-ui, sans-serif";
-      while (ctx.measureText(label).width > r - 110 && size > 18) { size -= 2; ctx.font = "700 " + size + "px system-ui, sans-serif"; }
-      ctx.fillText(label, r - 22, 0);
-      ctx.restore();
+    var dir = (typeof omega === "number" && omega < 0) ? -1 : 1;
+    if (visSpeed > BLUR_START) {
+      // labels fade out between BLUR_START and LABEL_FADE_END
+      var fade = Math.max(0, Math.min(1, (visSpeed - BLUR_START) / (LABEL_FADE_END - BLUR_START)));
+      var spread = Math.min(visSpeed / 60, 1.2);          // trailing arc ~ one frame of motion, capped
+      var GHOSTS = 7;
+      blit(artPlain, rotation, 1);
+      for (var gI = GHOSTS; gI >= 1; gI--) blit(artPlain, rotation - dir * spread * gI / GHOSTS, 0.22 * (1 - gI / (GHOSTS + 1)));
+      if (fade < 1) blit(artFull, rotation, 1 - fade);
+    } else {
+      blit(artFull, rotation, 1);
     }
     ctx.beginPath(); ctx.arc(c, c, 54, 0, 2 * Math.PI); ctx.fillStyle = "#fff"; ctx.fill();
     ctx.fillStyle = "#1b1b2f"; ctx.font = "800 30px system-ui, sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
@@ -128,9 +168,11 @@
     if (idx === lastSlice) return;
     lastSlice = idx;
     var now = performance.now();
-    if (now - lastTick < 55) return;
+    if (visSpeed > 60) return;                                       // a blur: no ticks
+    var gap = visSpeed > 25 ? 110 : 60;
+    if (now - lastTick < gap) return;
     lastTick = now;
-    if (navigator.vibrate) { try { navigator.vibrate(6); } catch (e) {} }
+    if (navigator.vibrate && visSpeed < 25) { try { navigator.vibrate(6); } catch (e) {} }
     if (audioCtx && audioCtx.state === "running") {
       try { var o = audioCtx.createOscillator(), g = audioCtx.createGain(), t = audioCtx.currentTime;
         o.type = "square"; o.frequency.value = 1800; g.gain.setValueAtTime(0.04, t); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.03);
@@ -166,17 +208,25 @@
   }
 
   // ---- finger physics (flick, inertia, add speed, hold to brake) ----
-  var MAX_OMEGA = 30;          // rad/s (~4.8 turns per second)
+  var MAX_OMEGA = 150;         // rad/s (~24 turns per second)
   var MIN_FLICK = 1.2;         // rad/s needed on release to count as a flick
-  var STOP_OMEGA = 0.08;       // below this the wheel is at rest
   var MIN_TOTAL = TWO_PI;      // at least one full turn before a result counts
-  var omega = 0;               // angular velocity, rad/s (positive = clockwise)
-  var fK = 0.6, fC = 0.5;      // friction: proportional + constant, randomized per flick
+  var fK = 0.25, fC = 1.0;     // friction (fixed, deterministic): domega/dt = -(fK*|omega| + fC)
+  var BK = 6, BC = 12;         // brake friction while a finger is held still on the wheel
   var session = false, total = 0;
   var loopOn = false, lastTs = null;
   var ptr = null;              // active pointer state
 
-  function randomizeFriction() { fK = 0.45 + randFloat() * 0.4; fC = 0.3 + randFloat() * 0.5; }
+  // Exact solution of domega/dt = -(k*w + c) over dt, so landing doesn't depend on frame timing.
+  function coast(dt, k, c) {
+    var w0 = Math.abs(omega), sign = omega > 0 ? 1 : -1;
+    var tz = Math.log((k * w0 + c) / c) / k;                         // time until it would stop
+    var t = Math.min(dt, tz), A = w0 + c / k, e = Math.exp(-k * t);
+    var dTheta = A * (1 - e) / k - (c / k) * t;
+    var w1 = t >= tz ? 0 : A * e - c / k;
+    rotateBy(sign * dTheta);
+    omega = sign * w1;
+  }
   function angleAt(e) {
     var r = canvas.getBoundingClientRect();
     return Math.atan2(e.clientY - (r.top + r.height / 2), e.clientX - (r.left + r.width / 2));
@@ -187,15 +237,10 @@
   function startLoop() { if (!loopOn) { loopOn = true; lastTs = null; requestAnimationFrame(loop); } }
   function loop(ts) {
     if (lastTs === null) lastTs = ts;
-    var dt = Math.min(0.05, (ts - lastTs) / 1000); lastTs = ts;
+    var dt = Math.min(0.25, Math.max(0, (ts - lastTs) / 1000)); lastTs = ts;
     if (omega !== 0) {
       var braking = ptr && (ts - ptr.lastMove) > 90;                  // finger held still = brake
-      var k = braking ? 7 : fK, c = braking ? 10 : fC;
-      var mag = Math.abs(omega), sign = omega > 0 ? 1 : -1;
-      mag = Math.max(0, mag - (k * mag + c) * dt);
-      omega = sign * mag;
-      rotateBy(omega * dt);
-      if (mag < STOP_OMEGA) omega = 0;
+      coast(dt, braking ? BK : fK, braking ? BC : fC);
     }
     draw(); tick();
     if (omega === 0 && !ptr) { loopOn = false; comeToRest(); return; }
@@ -252,9 +297,8 @@
     if (Math.abs(v) >= MIN_FLICK) {
       if (!session) { session = true; total = 0; }
       omega = Math.max(-MAX_OMEGA, Math.min(MAX_OMEGA, omega + v)); // flicking a spinning wheel adds speed
-      randomizeFriction();
       startLoop();
-    } else if (omega !== 0 && Math.abs(omega) >= STOP_OMEGA) {
+    } else if (omega !== 0) {
       startLoop();                                                   // let go after a light touch: keep coasting
     } else {
       omega = 0; session = false; total = 0; spinning = false; setBusy(false);
@@ -333,7 +377,7 @@
     .then(function (data) { items = data; draw(); lastSlice = sliceUnderPointer(); })
     .catch(function () { document.querySelector(".sub").textContent = "Couldn't load the list. Pull to refresh."; });
   draw();
-  window.__wheel = { spin: spin, items: function () { return items; }, rotation: function () { return rotation; }, omega: function () { return omega; }, under: sliceUnderPointer, maxOmega: MAX_OMEGA };
+  window.__wheel = { spin: spin, items: function () { return items; }, rotation: function () { return rotation; }, omega: function () { return omega; }, under: sliceUnderPointer, maxOmega: MAX_OMEGA, visSpeed: function () { return visSpeed; }, _setRotation: function (r) { rotation = r; draw(); }, _fling: function (w) { session = true; total = 0; omega = w; spinning = true; setBusy(true); startLoop(); } };
 })();
 </script>
 </body>
