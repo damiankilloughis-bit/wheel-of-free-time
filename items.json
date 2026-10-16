@@ -98,18 +98,18 @@
     "name": "Hold a handstand for a long time",
     "label": "Handstand",
     "type": "skill",
-    "block": "Lesson 2: stop falling back. Do wall drills for weight shift (heel of palm vs. fingers, shoulders over hands, hips stacked), then filmed kick-ups.",
+    "block": "Lesson 3: peel your heels off the wall (back to wall). Make your body one piece, push with your fingertips, adjust your hand distance, try the shoulder peel, then do floor kick-ups to release the safety brake.",
     "links": [
       {
-        "title": "Paul Twyman: Fix your handstand balance",
-        "url": "https://www.youtube.com/watch?v=sjzV_ACPvDA"
+        "title": "Paul Twyman: Back to Wall Handstand Balance Drills (start 1:20)",
+        "url": "https://www.youtube.com/watch?v=stVj9X6RRFk&t=80s"
       },
       {
-        "title": "Shana Meyerson: Stop falling out of handstand",
-        "url": "https://www.youtube.com/watch?v=9tNHOXOzMRE"
+        "title": "Antranik: Heel Pulls",
+        "url": "https://www.youtube.com/watch?v=q6Xcsw0O23I"
       }
     ],
-    "currentLesson": "lessons/handstand-02.md"
+    "currentLesson": "lessons/handstand-03.md"
   },
   {
     "id": "master-stokes",
